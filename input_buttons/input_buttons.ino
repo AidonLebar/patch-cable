@@ -31,7 +31,7 @@ void setup() {
   pinMode(buttonPin5, INPUT);
   pinMode(buttonPin6, INPUT);
 
-  
+  Serial.begin(9600);
 }
 
 void loop() { 
@@ -39,6 +39,7 @@ void loop() {
   // what the fuck?
   
   //button 0
+  buttonState0 = digitalRead(buttonPin0);
   if (buttonState0 == HIGH) {
     out |= 0b01000000;
   }
@@ -46,47 +47,52 @@ void loop() {
     out &= 0b10111111;
   }
   //button 1
+  buttonState1 = digitalRead(buttonPin1);
   if (buttonState1 == HIGH) {
     out |= 0b00100000;
   }
   else {
     out &= 0b11011111;
   }
-//button 2
+  //button 2
+  buttonState2 = digitalRead(buttonPin2);
   if (buttonState2 == HIGH) {
     out |= 0b00010000;
   }
   else {
     out &= 0b11101111;
   }
-//button 3
+  //button 3
+  buttonState3 = digitalRead(buttonPin3);
   if (buttonState3 == HIGH) {
     out |= 0b00001000;
   }
   else {
     out &= 0b11110111;
   }
-//button 4
+  //button 4
+  buttonState4 = digitalRead(buttonPin4);
   if (buttonState4 == HIGH) {
     out |= 0b00000100;
   }
   else {
     out &= 0b11111011;
   }
-//button 5
+  //button 5
+  buttonState5 = digitalRead(buttonPin5);
   if (buttonState5 == HIGH) {
     out |= 0b00000010;
   }
   else {
     out &= 0b11111101;
   }
-//button 6
+  //button 6
+  buttonState6 = digitalRead(buttonPin6);
   if (buttonState6 == HIGH) {
     out |= 0b00000001;
   }
   else {
     out &= 0b11111110;
   }
-  
   Serial.write(out); //send input back to computer
 }
