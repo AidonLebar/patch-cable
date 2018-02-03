@@ -2,10 +2,10 @@ import serial
 
 arduino = serial.Serial('/dev/cu.usbmodem1411', 9600)
 prev = int.from_bytes(arduino.read(), byteorder = 'big')
-prevPotval = int.from_bytes(arduino.readline(), byteorder = 'big')
+prevPotval = int(arduino.readline())
 while(True):
     controlIn = int.from_bytes(arduino.read(), byteorder = 'big')
-    potIn = int.from_bytes(arduino.readline(), byteorder = 'big')
+    potIn = int(arduino.readline())
     if controlIn != prev:
         if controlIn & 0b00000001 != 0 and prev & 0b00000001 == 0:
             print("button 7.")
@@ -51,7 +51,7 @@ while(True):
             print("button 1 released.")
 
     if prevPotval != potIn:
-        print("potentiometer: {}".format(potIn))
+        print("potentiometer: {}".format(1/(potIn+1)))
 
     prev = controlIn
     prevPotval = potIn
