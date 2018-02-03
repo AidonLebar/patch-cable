@@ -2,6 +2,7 @@
 The circuit for each button:
  * pushbutton attached to corresopnding pin from +5V
  * 10K resistor attached to corresponding pin from ground
+ * potentiometer to analog pin 3
 */
 
 const int buttonPin0 = 4;
@@ -11,6 +12,7 @@ const int buttonPin3 = 7;
 const int buttonPin4 = 8;
 const int buttonPin5 = 9;
 const int buttonPin6 = 10;
+const int analogPin = 3;
 
 int buttonState0 = 0;
 int buttonState1 = 0;
@@ -19,6 +21,7 @@ int buttonState3 = 0;
 int buttonState4 = 0;
 int buttonState5 = 0;
 int buttonState6 = 0;
+int potVal = 0;
 
 byte out = 0b00000000;
 
@@ -94,5 +97,9 @@ void loop() {
   else {
     out &= 0b11111110;
   }
+
+  int potVal = analogRead(analogPin);
+  
   Serial.write(out); //send input back to computer
+  Serial.println(potVal);
 }
