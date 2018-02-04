@@ -315,21 +315,23 @@ class SawtoothNode(SourceNode):
     def sawtooth(self, x):
         try:
             evaluation = self.amplitude * (-2.0 / math.pi *
-                                           math.atan(1.0/math.tan(x * math.pi / (SAMPLE_RATE / self.frequency.value))))
+                                           math.atan(1.0/math.tan(self.phase + x * math.pi / (SAMPLE_RATE / self.frequency.value))))
         except ZeroDivisionError:
             evaluation = 0
         return evaluation
 
-    def __init__(self, frequency=Parameter(440.0), amplitude=1.0):
+    def __init__(self, frequency=Parameter(440.0), amplitude=1.0, phase=0.0):
         super().__init__()
         self.frequency = frequency
         self.function = self.sawtooth
         self.amplitude = amplitude
+        self.phase = phase
 
     def get_display_properties(self):
-        return 'Amplitude: {}\nFrequency: {}'.format(
+        return 'Amplitude: {}\nFrequency: {}\nPhase: {}'.format(
             self.amplitude,
-            self.frequency.cached_value
+            self.frequency.cached_value,
+            self.phase
         )
 
 
