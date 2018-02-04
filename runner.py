@@ -9,6 +9,8 @@ import random
 import functools
 import threading
 
+from input_buttons.input_reader import input_monitor
+
 
 SAMPLE_RATE = 19200.0
 VOLUME = 0.5
@@ -27,7 +29,7 @@ p = pyaudio.PyAudio()
 
 global_watchers = []
 
-inputs = []
+inputs = [0.0] * 8
 
 
 class Node:
@@ -47,8 +49,18 @@ class Node:
         up.attach_downstream(self)
         return self
 
+    def unregister_upstream(self, up):
+        if up in self.upstream:
+            self.upstream.remove(up)
+            self.upstream_count = len(self.upstream)
+            up.remove_downstream(self)
+        return self
+
     def attach_downstream(self, ds):
         self.downstream.append(ds)
+
+    def remove_downstream(self, ds):
+        self.downstream.remove(ds)
 
     def register_downstream(self, ds):
         self.attach_downstream(ds)
@@ -209,6 +221,10 @@ class LinearDecayNode(Node):
         self._x += 1
         super().step()
 
+    def reset_chain(self):
+        self._x = 0
+        super().reset_chain()
+
 
 cached_repeat = range(FRAME_SIZE)
 
@@ -221,6 +237,7 @@ class Chain:
 
         self.source_node = source_node
         self.termination_node = termination_node
+        self.old_termination_node = termination_node
 
         self.source_node.chain = self
         self.termination_node.chain = self
@@ -231,6 +248,7 @@ class Chain:
 
         self.time_elapsed = 0.0
         self.duration = duration
+        self.old_duration = duration
 
     def play_chain(self):
         if self.started:
@@ -265,13 +283,15 @@ class Chain:
             if self.time_elapsed < self.duration:
                 return
 
-        if self.termination_node.release_chain is not None and self.termination_node.release_chain.duration >= 0.0:
+        if (self.termination_node.release_chain is not None and self.termination_node.release_chain.duration >= 0.0
+                and not self.terminating):
             self.terminating = True
 
             self.termination_node.release_chain.source_node.register_upstream(self.termination_node)
             duration = self.termination_node.release_chain.duration
             self.termination_node = self.termination_node.release_chain.termination_node
 
+            self.old_duration = self.duration
             self.duration = (self.duration if self.duration > 0 else 0) + duration
 
             return
@@ -280,8 +300,17 @@ class Chain:
         self.stream.close()
         self.stream = None
 
-        self.started = False
+        self.termination_node = self.old_termination_node
+        self.termination_node.release_chain.source_node.unregister_upstream(self.termination_node)
+        self.termination_node.release_chain.reset_chain()
 
+        self.reset_chain()
+
+    def reset_chain(self):
+        self.started = False
+        self.terminating = False
+        self.time_elapsed = 0.0
+        self.duration = self.old_duration
         self.source_node.reset_chain()
 
     def tick(self):
@@ -291,6 +320,7 @@ class Chain:
                 self.stop_chain()
 
     def set_duration(self, duration):
+        self.old_duration = duration  # Not used the way it would imply here
         self.duration = duration
         return self
 
@@ -339,9 +369,9 @@ class Parameter:
 
 
 test_decay = Chain.build_linear(
-    LinearDecayNode(duration=BEAT_WHOLE * 2),
+    LinearDecayNode(duration=BEAT_4TH),
     ChainTerminationNode()
-).set_duration(BEAT_WHOLE * 2)
+).set_duration(BEAT_4TH)
 
 # test_filter_param = Parameter(Chain.build_linear(
 #     BeatNode(use_global_steps=True, beat_length=BEAT_4TH, gap_length=BEAT_4TH*3),
@@ -349,7 +379,7 @@ test_decay = Chain.build_linear(
 # ))
 
 
-something_param = Parameter(0.0)
+something_param = Parameter(7)
 
 
 # test_dummy = ChainStartNode(something_param)
@@ -370,15 +400,16 @@ test_dummy = ChainStartNode(something_param)  # SourceNode()
 
 test_source_1 = SineNode(frequency=164.81).register_upstream(test_dummy)
 test_source_2 = SineNode(frequency=196.00).register_upstream(test_dummy)
-# test_source_3 = SineNode(frequency=246.94).register_upstream(test_dummy)
+test_source_3 = SineNode(frequency=246.94).register_upstream(test_dummy)
 # test_source_4 = SineNode(frequency=329.63).register_upstream(test_dummy)
 # test_source_5 = SineNode(frequency=392.00).register_upstream(test_dummy)
 # test_source_6 = SineNode(frequency=493.88).register_upstream(test_dummy)
 
+# release_chain=test_decay
 test_out = ChainTerminationNode(release_chain=test_decay)\
     .register_upstream(test_source_1) \
-    .register_upstream(test_source_2) # \
-    # .register_upstream(test_source_3) #\
+    .register_upstream(test_source_2) \
+    .register_upstream(test_source_3) #\
     # .register_upstream(test_source_4)\
     # .register_upstream(test_source_5)
 
@@ -404,17 +435,19 @@ def event_handler():
 
 
 t = threading.Thread(target=event_handler)
+t2 = threading.Thread(target=input_monitor, args=(inputs,))
 t.start()
+t2.start()
 
 variables = {}
 
-time.sleep(1)
+# time.sleep(1)
 
-something_param.param_value = 1.0
+# something_param.param_value = 1.0
 
-time.sleep(4)
+# time.sleep(4)
 
-something_param.param_value = 0.0
+# something_param.param_value = 0.0
 
 # test_chain.play_chain()
 
