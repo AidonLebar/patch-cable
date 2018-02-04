@@ -656,15 +656,23 @@ t.start()
 t2.start()
 t3.start()
 
+command = ""
 
-# while command != "quit":
-#     command = input("patch-cable > ")
-#
-#     if command == "quit":
-#         continue
-#     elif re.match("show[\w+]")
-#
-#     print(command)
+show_re = "show\s+(?P<chain>\w+)"
+wave_re = "wave\s+(?P<dur>[0-9\.]+)\s+(?P<chain>\w+)"
+
+while command != "quit":
+    command = input("patch-cable > ")
+
+    if command == "quit":
+        continue
+    elif re.match(show_re, command):
+        m = re.match(show_re, command).groupdict()
+        eval('{}.visualize_chain()'.format(m['chain']))
+    elif re.match(wave_re, command):
+        m = re.match(wave_re, command).groupdict()
+        print('{}.chain_playviz({})'.format(m['chain'], float(m['dur']) * SAMPLE_RATE))
+        eval('{}.chain_playviz({})'.format(m['chain'], float(m['dur']) * SAMPLE_RATE))
 
 quit_threads.value = 1
 
