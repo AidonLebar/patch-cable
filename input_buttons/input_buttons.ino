@@ -100,7 +100,6 @@ void loop() {
 
   int potVal = analogRead(analogPin);
 
-  delay(100);
   Serial.write(out); //send input back to computer
   Serial.println(potVal);
 }
