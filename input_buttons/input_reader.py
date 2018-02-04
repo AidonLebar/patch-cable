@@ -6,9 +6,9 @@ def input_monitor(inputs):
     arduino.reset_input_buffer()
     prev = 0
     prevPotval = 0
-    while(True):
+    while True:
         try:
-            controlIn = int.from_bytes(arduino.read(), byteorder = 'big')
+            controlIn = int.from_bytes(arduino.read(), byteorder='big')
             potIn = int(arduino.readline())
         except Exception:
             continue

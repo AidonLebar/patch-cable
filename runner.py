@@ -35,25 +35,35 @@ class Parameter:
     PARAM_INPUT = 'PARAM_INPUT'
 
     def __init__(self, param_value):
+        self.param_value = param_value
+
         if type(param_value).__name__ == 'Chain':
             self.param_type = Parameter.PARAM_CHAIN
+            self.cached_value = self.param_value.value
         elif isinstance(param_value, float):
             self.param_type = Parameter.PARAM_CONSTANT
+            self.cached_value = self.param_value
         else:
             self.param_type = Parameter.PARAM_INPUT
-
-        self.param_value = param_value
+            self.cached_value = shared_list[self.param_value - 1]
+            global_watchers.append(self)
 
     @property
     def value(self):
         if self.param_type == Parameter.PARAM_CONSTANT:
             return self.param_value
-        if self.param_type == Parameter.PARAM_CHAIN:
+        elif self.param_type == Parameter.PARAM_CHAIN:
             return self.param_value.value
-        if self.param_type == Parameter.PARAM_INPUT:
-            return inputs[self.param_value - 1]
+        elif self.param_type == Parameter.PARAM_INPUT:
+            return shared_list[self.param_value - 1]
         else:
             return 0
+
+    def tick(self):
+        if self.param_type == Parameter.PARAM_CHAIN:
+            self.cached_value = self.param_value.value
+        elif self.param_type == Parameter.PARAM_INPUT:
+            self.cached_value = shared_list[self.param_value - 1]
 
 
 class Node:
@@ -162,14 +172,27 @@ class RandomNoiseNode(SourceNode):
 
 class SineNode(SourceNode):
     def sin(self, x):
-        return self.translate + self.amplitude * math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency.value)
+        #st = time.time()
+        freq = self.frequency_offset + self.frequency.cached_value * self.frequency_mulitplier
+        #print(time.time() - st)
+        return self.translate + self.amplitude * math.sin(TWO_PI * (x / SAMPLE_RATE)
+                                                          * (freq))
 
-    def __init__(self, frequency=Parameter(440.0), translate=0.0, amplitude=1.0):
+    def __init__(
+            self,
+            frequency=Parameter(440.0),
+            translate=0.0,
+            amplitude=1.0,
+            frequency_multiplier=1.0,
+            frequency_offset=0.0
+    ):
         super().__init__()
         self.frequency = frequency
         self.function = self.sin
         self.translate = translate
         self.amplitude = amplitude
+        self.frequency_mulitplier = frequency_multiplier
+        self.frequency_offset = frequency_offset
 
 
 class SquareNode(SourceNode):
@@ -410,7 +433,7 @@ class Chain:
 
     def tick(self):
         if self.started and self.duration >= 0:
-            self.time_elapsed += 1.0/128.0 * SAMPLE_RATE
+            self.time_elapsed += 1.0/64.0 * SAMPLE_RATE
             if self.time_elapsed > self.duration:
                 self.stop_chain()
 
@@ -460,7 +483,9 @@ button_7_chain = Chain(button_7_start, button_7_out)
 
 button_6 = Parameter(6)
 button_6_start = ChainStartNode(button_6)
-button_6_source = SineNode(frequency=Parameter(123.47)).register_upstream(button_6_start)
+# button_6_source = SineNode(frequency=Parameter(123.47)).register_upstream(button_6_start)
+button_6_source = SineNode(frequency=Parameter(8), frequency_offset=110.0, frequency_multiplier=600.0)\
+    .register_upstream(button_6_start)
 button_6_out = ChainTerminationNode().register_upstream(button_6_source)
 button_6_chain = Chain(button_6_start, button_6_out)
 
@@ -499,7 +524,7 @@ def event_handler(sl):
     while True:
         for w in global_watchers:
             w.tick()
-        time.sleep(1.0/128.0)
+        time.sleep(1.0/64.0)
 
 
 t = multiprocessing.Process(target=event_handler, args=(shared_list,))
