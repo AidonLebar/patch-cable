@@ -301,8 +301,10 @@ class Chain:
         self.stream = None
 
         self.termination_node = self.old_termination_node
-        self.termination_node.release_chain.source_node.unregister_upstream(self.termination_node)
-        self.termination_node.release_chain.reset_chain()
+
+        if self.termination_node.release_chain is not None:
+            self.termination_node.release_chain.source_node.unregister_upstream(self.termination_node)
+            self.termination_node.release_chain.reset_chain()
 
         self.reset_chain()
 
