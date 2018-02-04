@@ -1,6 +1,7 @@
 * {
     font-family: 'Open Sans', sans-serif;
     color: #444;
+    user-select: none;
 }
 
 body {
@@ -15,6 +16,17 @@ body h1 {
 
     font-weight: normal;
     color: rgba(0, 0, 0, 0.3);
+}
+
+#app {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+}
+
+#line-canvas {
+    pointer-events: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0; z-index: 1000;
 }
 
 div.node {
@@ -132,7 +144,7 @@ div.node-adder:hover ul {
     display: block;
     background-color: #FEFEFE;
     position: absolute;
-    top: 30px;
+    top: 40px;
     width: 240px;
 }
 

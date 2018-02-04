@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<!--suppress JSUnresolvedFunction, JSValidateTypes, HtmlUnknownAttribute, HtmlFormInputWithoutLabel -->
+<html lang="en">
+<head>
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:400,600,700" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/vue"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+
+    <script type="text/javascript">
+        const chainStarter = {
+            name: "Chain Starter",
+            connections: ["param", "output"],
+            parameters: {
+                duration: -1.0
+            }
+        };
+
+        const sineGenerator = {
+            name: "Sine Generator",
+            connections: ["input", "param", "output"],
+            parameters: {
+                frequency: 440.0,
+                translation: 0.0,
+                amplitude: 1.0
+            }
+        };
+        const squareGenerator = {
+            name: "Square Generator",
+            connections: ["input", "param", "output"],
+            parameters: {
+                frequency: 440.0,
+                translation: 0.0,
+                amplitude: 1.0
+            }
+        };
+        const sawtoothGenerator = {
+            name: "Sawtooth Generator",
+            connections: ["input", "param", "output"],
+            parameters: {
+                frequency: 440.0,
+                translation: 0.0,
+                amplitude: 1.0
+            }
+        };
+
+        $(function () {
+            var canvas = document.getElementById('line-canvas');
+            var ctx = canvas.getContext('2d');
+
+            var app = new Vue({
+                el: "#app",
+                data: {
+                    nodes: [{
+                        name: "Chain Starter",
+                        connections: ["param", "output"],
+                        parameters: {
+                            duration: -1.0
+                        }
+                    }, {
+                        name: "Sine Generator",
+                        connections: ["input", "param", "output"],
+                        parameters: {
+                            frequency: 440.0,
+                            translation: 0.0,
+                            amplitude: 1.0
+                        }
+                    }]
+                }
+            });
+
+            var dragging = false;
+            var dragOriginX = -1;
+            var dragOriginY = -1;
+
+            $(document).on("mouseenter", ".node:not(.initiated)", function() {
+                $(this).draggable({ handle: "h2" }).addClass("initiated");
+            });
+
+            $(document).on("dragstart", ".connection", function (event) {
+                console.log('dragstart');
+                dragging = true;
+                dragOriginX = event.clientX;
+                dragOriginY = event.clientY;
+            });
+
+            $(document).on("dragend", ".connection", function (event) {
+                console.log('dragend');
+                dragging = false;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            });
+
+            $(document).on("dragover", ".connection", function (event) {
+                event.preventDefault();
+            });
+
+            $(document).on("drop", ".connection", function (event) {
+                console.log('drop');
+            });
+
+            $(document).on("drag", ".connection", function (event) {
+                if (dragging) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.beginPath();
+                    ctx.moveTo(dragOriginX, dragOriginY);
+                    if (event.clientX !== 0 || event.clientY !== 0)
+                        ctx.lineTo(event.clientX, event.clientY);
+                    ctx.stroke();
+                }
+            });
+        });
+    </script>
+</head>
+<body>
+<canvas id="line-canvas" width="1280" height="800"></canvas>
+<div id="app">
+    <h1>Patch Cable</h1>
+    <div class="node-adder">
+        <span>Nodes &amp; Parameters <i class="material-icons">keyboard_arrow_down</i></span>
+        <ul>
+            <li>Chain Starter</li>
+            <li>Chain Terminator</li>
+            <li class="break"></li>
+            <li>Sine Generator</li>
+            <li>Square Generator</li>
+            <li>Sawtooth Generator</li>
+            <li>Random Noise Generator</li>
+            <li class="break"></li>
+            <li>Filter</li>
+            <li>Sustain</li>
+            <li>Linear Decay</li>
+            <li class="break"></li>
+            <li>Chain Parameter</li>
+            <li>Constant Parameter</li>
+            <li>Input Parameter</li>
+        </ul>
+    </div>
+
+    <div id="node-container">
+        <div v-for="node in nodes" class="node" id="node-">
+            <h2>{{ node.name }}</h2>
+            <div class="parameters">
+                <div class="flex-container" v-for="(parameter, name) in node.parameters">
+                    <label>{{ name }}</label>
+                    <input type="text" v-model="node.parameters[name]">
+                </div>
+            </div>
+            <div class="connections">
+                <div style="flex: 1;">
+                    <div draggable="true" class="connection input-connection" v-if="node.connections.includes('input')">
+                        <i class="material-icons">arrow_backward</i>
+                    </div>
+                </div>
+                <div style="flex: 1;">
+                    <div draggable="true" class="connection param-connection" v-if="node.connections.includes('param')">
+                        <i class="material-icons">arrow_upward</i>
+                    </div>
+                </div>
+                <div style="flex: 1;">
+                    <div draggable="true" class="connection output-connection" v-if="node.connections.includes('output')">
+                        <i class="material-icons">arrow_forward</i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!--<div class="node" id="test-node">-->
+    <!--<h2>Sine Generator</h2>-->
+    <!--<div class="parameters">-->
+        <!--<div class="flex-container">-->
+            <!--<label for="frequency">Frequency</label>-->
+            <!--<input type="text" id="frequency">-->
+        <!--</div>-->
+        <!--<div class="flex-container">-->
+            <!--<label for="translate">Translation</label>-->
+            <!--<input type="text" id="translate">-->
+        <!--</div>-->
+        <!--<div class="flex-container">-->
+            <!--<label for="amplitude">Amplitude</label>-->
+            <!--<input type="text" id="amplitude">-->
+        <!--</div>-->
+    <!--</div>-->
+    <!--<div class="connections">-->
+        <!--<div style="flex: 1;">-->
+            <!--<div class="connection input-connection"><i class="material-icons">arrow_backward</i></div>-->
+        <!--</div>-->
+        <!--<div style="flex: 1;">-->
+            <!--<div class="connection param-connection"><i class="material-icons">arrow_upward</i></div>-->
+        <!--</div>-->
+        <!--<div style="flex: 1;">-->
+            <!--<div class="connection output-connection"><i class="material-icons">arrow_forward</i></div>-->
+        <!--</div>-->
+    <!--</div>-->
+<!--</div>-->
+</body>
+</html>
