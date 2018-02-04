@@ -1,16 +1,17 @@
 import serial
 
 
-def input_monitor(inputs):
+def input_monitor(inputs, qt):
     arduino = serial.Serial('/dev/cu.usbmodem1411', 9600)
     arduino.reset_input_buffer()
     prev = 0
     prevPotval = 0
-    while True:
+    while not qt.value:
         try:
             controlIn = int.from_bytes(arduino.read(), byteorder='big')
             potIn = int(arduino.readline())
-        except Exception:
+        except Exception as e:
+            print(e)
             continue
             
         if controlIn != prev:
@@ -41,7 +42,6 @@ def input_monitor(inputs):
             if controlIn & 0b01000000 != 0 and prev & 0b01000000 == 0:
                 print("button 1.")
                 inputs[0] = 1.0
-
 
             if controlIn & 0b00000001 == 0 and prev & 0b00000001 != 0:
                 print("button 7 released.")
