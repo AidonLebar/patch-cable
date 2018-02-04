@@ -5,6 +5,9 @@ import numpy as np
 import time
 import random
 import multiprocessing
+import pygraphviz as pgv
+import sys
+import re
 
 from input_buttons.input_reader import input_monitor
 
@@ -20,10 +23,21 @@ BEAT_4TH = SAMPLE_RATE / 4.0
 BEAT_HALF = SAMPLE_RATE / 2.0
 BEAT_WHOLE = SAMPLE_RATE
 
+BUTTON_1 = 1
+BUTTON_2 = 2
+BUTTON_3 = 3
+BUTTON_4 = 4
+BUTTON_5 = 5
+BUTTON_6 = 6
+BUTTON_7 = 7
+POTENTIOMETER = 8
+
 TWO_PI = 2.0 * math.pi
 
 
 global_watchers = []
+
+quit_threads = multiprocessing.Value('i', 0)
 
 manager = multiprocessing.Manager()
 shared_list = manager.list(([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
@@ -114,6 +128,9 @@ class Node:
         for ds in self.downstream:
             ds.reset_chain()
 
+    def get_display_properties(self):
+        return ''
+
 
 class SourceNode(Node):
     def __init__(self):
@@ -152,6 +169,9 @@ class ChainStartNode(SourceNode):
         self.started = False
         super().reset_chain()
 
+    def get_display_properties(self):
+        return 'Gate: {}'.format(self.gate)
+
 
 class ChainTerminationNode(Node):
     def __init__(self, release_chain=None):
@@ -169,14 +189,15 @@ class RandomNoiseNode(SourceNode):
         self.amplitude = amplitude
         self.function = self.noise_fn
 
+    def get_display_properties(self):
+        return 'Translate: {}\nAmplitude: {}'.format(self.translate, self.amplitude)
+
 
 class SineNode(SourceNode):
     def sin(self, x):
-        #st = time.time()
-        freq = self.frequency_offset + self.frequency.cached_value * self.frequency_mulitplier
-        #print(time.time() - st)
         return self.translate + self.amplitude * math.sin(TWO_PI * (x / SAMPLE_RATE)
-                                                          * (freq))
+                                                          * (self.frequency_offset + self.frequency.cached_value
+                                                             * self.frequency_mulitplier))
 
     def __init__(
             self,
@@ -194,6 +215,15 @@ class SineNode(SourceNode):
         self.frequency_mulitplier = frequency_multiplier
         self.frequency_offset = frequency_offset
 
+    def get_display_properties(self):
+        return 'Translate: {}\nAmplitude: {}\nFrequency: {} + {} * {}'.format(
+            self.translate,
+            self.amplitude,
+            self.frequency_offset,
+            self.frequency.cached_value,
+            self.frequency_mulitplier
+        )
+
 
 class SquareNode(SourceNode):
     def square(self, x):
@@ -203,6 +233,11 @@ class SquareNode(SourceNode):
         super().__init__()
         self.frequency = frequency
         self.function = self.square
+
+    def get_display_properties(self):
+        return 'Frequency: {}'.format(
+            self.frequency.cached_value
+        )
 
 
 class TriangleNode(SourceNode):
@@ -216,6 +251,13 @@ class TriangleNode(SourceNode):
         self.function = self.triangle
         self.translate = translate
         self.amplitude = amplitude
+
+    def get_display_properties(self):
+        return 'Translate: {}\nAmplitude: {}\nFrequency: {}'.format(
+            self.translate,
+            self.amplitude,
+            self.frequency.cached_value
+        )
 
 
 class KickDrumNode(SourceNode):  # kick drum
@@ -284,6 +326,12 @@ class SawtoothNode(SourceNode):
         self.function = self.sawtooth
         self.amplitude = amplitude
 
+    def get_display_properties(self):
+        return 'Amplitude: {}\nFrequency: {}'.format(
+            self.amplitude,
+            self.frequency.cached_value
+        )
+
 
 class BeatNode(SourceNode):
     def beat_fn(self, x):
@@ -338,6 +386,11 @@ class LinearDecayNode(Node):
         self._x = 0
         super().reset_chain()
 
+    def get_display_properties(self):
+        return 'Duration: {} s'.format(
+            self.duration / SAMPLE_RATE
+        )
+
 
 cached_repeat = range(FRAME_SIZE)
 
@@ -363,7 +416,7 @@ class Chain:
         self.duration = duration
         self.old_duration = duration
 
-    def play_chain(self):
+    def play_chain(self, save_values=False):
         if self.started:
             return
 
@@ -371,6 +424,8 @@ class Chain:
         p = pyaudio.PyAudio()
 
         sn = self.source_node
+
+        values = []
 
         def run_chain(nodes):
             while len(nodes) > 0:
@@ -389,10 +444,19 @@ class Chain:
 
             return np.array(output_samples, dtype=np.float32) * VOLUME, pyaudio.paContinue
 
-        self.stream = p.open(format=pyaudio.paFloat32, channels=1, rate=int(SAMPLE_RATE), output=True,
-                             frames_per_buffer=FRAME_SIZE, stream_callback=callback)
+        if save_values:
+            for i in range(int(self.duration + 1.0)):
+                self.time_elapsed += 1
+                run_chain([sn])
+                values.append(self.termination_node.value)
+        else:
+            self.stream = p.open(format=pyaudio.paFloat32, channels=1, rate=int(SAMPLE_RATE), output=True,
+                                 frames_per_buffer=FRAME_SIZE, stream_callback=callback)
 
         self.started = True
+
+        if save_values:
+            return values
 
     def stop_chain(self):
         if self.started and self.duration >= 0:
@@ -412,9 +476,10 @@ class Chain:
 
             return
 
-        self.stream.stop_stream()
-        self.stream.close()
-        self.stream = None
+        if self.stream is not None:
+            self.stream.stop_stream()
+            self.stream.close()
+            self.stream = None
 
         self.termination_node = self.old_termination_node
 
@@ -430,6 +495,53 @@ class Chain:
         self.time_elapsed = 0.0
         self.duration = self.old_duration
         self.source_node.reset_chain()
+
+    def visualize_chain(self):
+        import matplotlib.pyplot as plt
+        import matplotlib.image as mpimg
+
+        def node_id(node):
+            return type(node).__name__ + '\n' + str(id(node)) + '\n' + node.get_display_properties()
+
+        graph = pgv.AGraph(strict=False, directed=True)
+        nodes = [self.source_node]
+        while len(nodes) > 0:
+            new_nodes = []
+            for n in nodes:
+                graph.add_node(node_id(n))
+                for nd in n.downstream:
+                    graph.add_edge(node_id(n), node_id(nd))
+                new_nodes.extend(n.downstream)
+            if nodes[0] == self.termination_node:
+                if self.termination_node.release_chain is not None:
+                    new_nodes = [self.termination_node.release_chain.source_node]
+                    graph.add_edge(
+                        node_id(self.termination_node),
+                        node_id(self.termination_node.release_chain.source_node)
+                    )
+                    e = graph.get_edge(
+                        node_id(self.termination_node),
+                        node_id(self.termination_node.release_chain.source_node)
+                    )
+                    e.attr['color'] = 'turquoise'
+            nodes = list(set(new_nodes))
+        graph.layout(prog='dot')
+        graph.draw('temp.png')
+        img = mpimg.imread('temp.png')
+        plt.imshow(img, interpolation='bicubic')
+        plt.show()
+
+    def chain_playviz(self, new_duration):
+        import matplotlib.pyplot as plt
+        import matplotlib.image as mpimg
+
+        old_duration = self.duration
+        self.duration = new_duration
+        values = self.play_chain(save_values=True)
+        self.duration = old_duration
+
+        plt.plot(range(len(values)), values, 'b-')
+        plt.show()
 
     def tick(self):
         if self.started and self.duration >= 0:
@@ -480,7 +592,6 @@ button_7_out = ChainTerminationNode(release_chain=eighth_decay).register_upstrea
     .register_upstream(button_7_source3)
 button_7_chain = Chain(button_7_start, button_7_out)
 
-
 button_6 = Parameter(6)
 button_6_start = ChainStartNode(button_6)
 # button_6_source = SineNode(frequency=Parameter(123.47)).register_upstream(button_6_start)
@@ -498,6 +609,8 @@ button_5_out = ChainTerminationNode().register_upstream(button_5_source1)\
     .register_upstream(button_5_source2)\
     .register_upstream(button_5_source3)
 button_5_chain = Chain(button_5_start, button_5_out)
+
+# button_7_chain.chain_playviz(BEAT_WHOLE)
 
 button_4 = Parameter(4)
 kick_drum_start = ChainStartNode(button_4)
@@ -517,21 +630,43 @@ button_2 = Parameter(2)
 button_1 = Parameter(1)
 
 
-def event_handler(sl):
+def event_handler(sl, qt):
     global global_watchers
     global inputs
     inputs = sl
-    while True:
+    while not qt.value:
         for w in global_watchers:
             w.tick()
         time.sleep(1.0/64.0)
 
 
-t = multiprocessing.Process(target=event_handler, args=(shared_list,))
-t2 = multiprocessing.Process(target=input_monitor, args=(shared_list,))
+aliases = {
+    'Chain': ChainStartNode,
+    'Sine': SineNode,
+    'Triangle': TriangleNode,
+    'Square': SquareNode,
+    'Sawtooth': SawtoothNode
+}
+
+
+t = multiprocessing.Process(target=event_handler, args=(shared_list, quit_threads))
+t2 = multiprocessing.Process(target=input_monitor, args=(shared_list, quit_threads))
+t3 = multiprocessing.Process()
 t.start()
 t2.start()
+t3.start()
+
+
+# while command != "quit":
+#     command = input("patch-cable > ")
+#
+#     if command == "quit":
+#         continue
+#     elif re.match("show[\w+]")
+#
+#     print(command)
+
+quit_threads.value = 1
+
 t2.join()
 t.join()
-
-variables = {}
