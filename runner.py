@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import pyaudio
 import math
 import numpy as np
 import time
@@ -26,12 +25,12 @@ BEAT_WHOLE = SAMPLE_RATE
 
 TWO_PI = 2.0 * math.pi
 
-p = pyaudio.PyAudio()
 
 global_watchers = []
 
 manager = multiprocessing.Manager()
 shared_list = manager.list(([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
+
 
 class Node:
     def id(self, x):
@@ -175,16 +174,16 @@ class TriangleNode(SourceNode):
         self.amplitude = amplitude
 
 
-class KickDrumNode(SourceNode): #kick drum
+class KickDrumNode(SourceNode):  # kick drum
     def kick_drum(self, x):
-        if x > 0 and x < self.length:
+        if 0 < x < self.length:
             return self.translate + random.random() * self.amplitude
-        elif x >= self.length and x < self.length + 600:
+        elif self.length <= x < self.length + 600:
             return self.amplitude * math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency)
         else:
             return 0
 
-    def __init__(self, frequency = 75, length=100.0,  use_global_steps=False, amplitude=2.0, translate=0.0):
+    def __init__(self, frequency=75, length=100.0,  use_global_steps=False, amplitude=2.0, translate=0.0):
         super().__init__(use_global_steps)
         self.length = length
         self.frequency = frequency
@@ -193,14 +192,14 @@ class KickDrumNode(SourceNode): #kick drum
         self.translate = translate
 
 
-class HiHatNode(SourceNode): #kick drum
+class HiHatNode(SourceNode):  # kick drum
     def hi_hat(self, x):
         if x < self.length:
             return self.translate + random.uniform(self.pass_filter, 1.0) * self.amplitude
         else:
             return 0
 
-    def __init__(self, pass_filter = 0.0, length=400.0,  use_global_steps=False, amplitude=1.0, translate=0.0):
+    def __init__(self, pass_filter=0.0, length=400.0,  use_global_steps=False, amplitude=1.0, translate=0.0):
         super().__init__(use_global_steps)
         self.length = length
         self.pass_filter = pass_filter
@@ -213,7 +212,7 @@ class SawtoothNode(SourceNode):
     def sawtooth(self, x):
         try:
             evaluation = self.amplitude * (-2.0 / math.pi * math.atan(1.0/math.tan(x * math.pi / (SAMPLE_RATE / self.frequency))))
-        except Exception:
+        except ZeroDivisionError:
             evaluation = 0
         return evaluation
 
@@ -305,6 +304,9 @@ class Chain:
         if self.started:
             return
 
+        import pyaudio
+        p = pyaudio.PyAudio()
+
         sn = self.source_node
 
         def run_chain(nodes):
@@ -324,7 +326,10 @@ class Chain:
 
             return np.array(output_samples, dtype=np.float32) * VOLUME, pyaudio.paContinue
 
-
+        print('playing')
+        # print(p.get_default_host_api_info())
+        # print(p.get_device_count())
+        # print(p.get_default_output_device_info())
         self.stream = p.open(format=pyaudio.paFloat32, channels=1, rate=int(SAMPLE_RATE), output=True,
                              frames_per_buffer=FRAME_SIZE, stream_callback=callback)
 
@@ -416,7 +421,7 @@ class Parameter:
         if self.param_type == Parameter.PARAM_CHAIN:
             return self.param_value.value
         if self.param_type == Parameter.PARAM_INPUT:
-            print(inputs[self.param_value - 1])
+            # print(inputs[self.param_value - 1])
             return inputs[self.param_value - 1]
         else:
             return 0
@@ -447,15 +452,15 @@ button_7_chain = Chain(button_7_start, button_7_out)
 
 button_6 = Parameter(6)
 button_6_start = ChainStartNode(button_6)
-button_6_source = SineNode(frequency = 123.47).register_upstream(button_6_start)
+button_6_source = SineNode(frequency=123.47).register_upstream(button_6_start)
 button_6_out = ChainTerminationNode().register_upstream(button_6_source)
 button_6_chain = Chain(button_6_start, button_6_out)
 
 button_5 = Parameter(5)
 button_5_start = ChainStartNode(button_5)
-button_5_source1 = SineNode(frequency = 73.4, translate = 0.1).register_upstream(button_5_start)
-button_5_source2 = TriangleNode(frequency = 73.4, translate = 0.1).register_upstream(button_5_start)
-button_5_source3 = TriangleNode(frequency = 36.7).register_upstream(button_5_start)
+button_5_source1 = SineNode(frequency=73.4, translate=0.1).register_upstream(button_5_start)
+button_5_source2 = TriangleNode(frequency=73.4, translate=0.1).register_upstream(button_5_start)
+button_5_source3 = TriangleNode(frequency=36.7).register_upstream(button_5_start)
 button_5_out = ChainTerminationNode().register_upstream(button_5_source1)\
     .register_upstream(button_5_source2)\
     .register_upstream(button_5_source3)
@@ -469,7 +474,7 @@ kick_drum_chain = Chain(kick_drum_start, kick_drum_out)
 
 button_3 = Parameter(3)
 hi_hat_start = ChainStartNode(button_3)
-hi_hat_source = HiHatNode(pass_filter = 0.3).register_upstream(hi_hat_start)
+hi_hat_source = HiHatNode(pass_filter=0.3).register_upstream(hi_hat_start)
 hi_hat_out = ChainTerminationNode().register_upstream(hi_hat_source)
 hi_hat_chain = Chain(hi_hat_start, hi_hat_out)
 
@@ -479,10 +484,10 @@ button_2 = Parameter(2)
 button_1 = Parameter(1)
 
 
-def event_handler(shared_list):
+def event_handler(sl):
     global global_watchers
     global inputs
-    inputs = shared_list
+    inputs = sl
     while True:
         for w in global_watchers:
             w.tick()
