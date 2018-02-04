@@ -161,6 +161,15 @@ class SquareNode(SourceNode):
         self.frequency = frequency
         self.function = self.square
 
+class TriangleNode(SourceNode):
+    def triangle(self, x):
+        return (2 / math.pi) * math.asin(math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency))
+
+    def __init__(self, frequency=440.0, use_global_steps=False, amplitude=0.5):
+        super().__init__(use_global_steps)
+        self.frequency = frequency
+        self.function = self.triangle
+
 
 class SawtoothNode(SourceNode):
     def sawtooth(self, x):
@@ -374,44 +383,49 @@ class Parameter:
             return 0
 
 
-test_decay = Chain.build_linear(
+forth_decay = Chain.build_linear(
+    LinearDecayNode(duration=BEAT_4TH),
+    ChainTerminationNode()
+).set_duration(BEAT_4TH)
+
+
+eighth_decay = Chain.build_linear(
     LinearDecayNode(duration=BEAT_8TH),
     ChainTerminationNode()
 ).set_duration(BEAT_8TH)
 
 
 button_7 = Parameter(7)
-
-test_dummy = ChainStartNode(button_7)  # SourceNode()
-
-test_source_1 = BeatNode( beat_length=BEAT_8TH,).register_upstream(test_dummy)
-test_source_2 = BeatNode().register_upstream(test_dummy)
-test_source_3 = SawtoothNode(frequency=246.94).register_upstream(test_dummy)
-
-test_out = ChainTerminationNode()\
-    .register_upstream(test_source_1) \
-    .register_upstream(test_source_2) \
-    .register_upstream(test_source_3)
-
-test_chain = Chain(test_dummy, test_out)
+sawtooth_G_start = ChainStartNode(button_7)
+sawtooth_G_source1 = SineNode(frequency=49.99).register_upstream(sawtooth_G_start)
+sawtooth_G_source2 = SineNode(frequency=97.99).register_upstream(sawtooth_G_start)
+sawtooth_G_source3 = SawtoothNode(frequency=130.83).register_upstream(sawtooth_G_start)
+sawtooth_G_out = ChainTerminationNode(release_chain=eighth_decay).register_upstream(sawtooth_G_source1)\
+    .register_upstream(sawtooth_G_source2)\
+    .register_upstream(sawtooth_G_source2)
+sawtooth_G_chain = Chain(sawtooth_G_start, sawtooth_G_out)
 
 
 button_6 = Parameter(6)
+triangle_test_start = ChainStartNode(button_6)
+triangle_test_source = TriangleNode().register_upstream(triangle_test_start)
+triangle_test_out = ChainTerminationNode().register_upstream(triangle_test_source)
+triangle_test_chain = Chain(triangle_test_start, triangle_test_out)
 
-test_duration = ChainStartNode(button_6)
+button_5 = Parameter(5)
+sine_test_start = ChainStartNode(button_5)
+sine_test_source = SineNode().register_upstream(sine_test_start)
+sine_test_out = ChainTerminationNode().register_upstream(sine_test_source)
+sine_test_chain = Chain(sine_test_start, sine_test_out)
 
-sine_filter = Parameter(Chain.build_linear(
-    SineNode().register_upstream(test_duration),
-    ChainTerminationNode()
-))
+button_4 = Parameter(4)
 
-noise_source = RandomNoiseNode().register_upstream(test_duration)
+button_3 = Parameter(3)
 
-noise_filter = FilterNode(sine_filter).register_upstream(noise_source)
+button_2 = Parameter(2)
 
-noise_out = ChainTerminationNode().register_upstream(noise_filter)
+button_1 = Parameter(2)
 
-noise_chain = Chain(test_duration, noise_out)
 
 
 
