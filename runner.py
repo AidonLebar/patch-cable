@@ -164,7 +164,11 @@ class SquareNode(SourceNode):
 
 class SawtoothNode(SourceNode):
     def sawtooth(self, x):
-        return self.amplitude * (-2.0 / math.pi * math.atan(1.0/math.tan(x * math.pi / (SAMPLE_RATE / self.frequency))))
+        try:
+            evaluation = self.amplitude * (-2.0 / math.pi * math.atan(1.0/math.tan(x * math.pi / (SAMPLE_RATE / self.frequency))))
+        except Exception:
+            evaluation = 0
+        return evaluation
 
     def __init__(self, frequency=440.0, use_global_steps=False, amplitude=0.5):
         super().__init__(use_global_steps)
@@ -371,61 +375,44 @@ class Parameter:
 
 
 test_decay = Chain.build_linear(
-    LinearDecayNode(duration=BEAT_4TH),
+    LinearDecayNode(duration=BEAT_8TH),
     ChainTerminationNode()
-).set_duration(BEAT_4TH)
-
-# test_filter_param = Parameter(Chain.build_linear(
-#     BeatNode(use_global_steps=True, beat_length=BEAT_4TH, gap_length=BEAT_4TH*3),
-#     ChainTerminationNode()
-# ))
+).set_duration(BEAT_8TH)
 
 
-something_param = Parameter(7)
+button_7 = Parameter(7)
 
+test_dummy = ChainStartNode(button_7)  # SourceNode()
 
-# test_dummy = ChainStartNode(something_param)
-# test_source = RandomNoiseNode(amplitude=1)\
-#     .register_upstream(test_dummy)
-# test_source_2 = SquareNode(220.0)\
-#     .register_upstream(test_dummy)
-# test_filter = FilterNode(test_filter_param)\
-#     .register_upstream(test_source)
-# test_out = ChainTerminationNode(release_chain=test_decay) \
-#     .register_upstream(test_filter) \
-#     .register_upstream(test_source_2)
-#
-# test_chain = Chain(test_dummy, test_out)
+test_source_1 = BeatNode( beat_length=BEAT_8TH,).register_upstream(test_dummy)
+test_source_2 = BeatNode().register_upstream(test_dummy)
+test_source_3 = SawtoothNode(frequency=246.94).register_upstream(test_dummy)
 
-
-test_dummy = ChainStartNode(something_param)  # SourceNode()
-
-test_source_1 = SineNode(frequency=164.81).register_upstream(test_dummy)
-test_source_2 = SineNode(frequency=196.00).register_upstream(test_dummy)
-test_source_3 = SineNode(frequency=246.94).register_upstream(test_dummy)
-# test_source_4 = SineNode(frequency=329.63).register_upstream(test_dummy)
-# test_source_5 = SineNode(frequency=392.00).register_upstream(test_dummy)
-# test_source_6 = SineNode(frequency=493.88).register_upstream(test_dummy)
-
-# release_chain=test_decay
-test_out = ChainTerminationNode(release_chain=test_decay)\
+test_out = ChainTerminationNode()\
     .register_upstream(test_source_1) \
     .register_upstream(test_source_2) \
-    .register_upstream(test_source_3) #\
-    # .register_upstream(test_source_4)\
-    # .register_upstream(test_source_5)
-
-"""
-\
-    .register_upstream(test_source_2)\
-    .register_upstream(test_source_3)\
-    .register_upstream(test_source_4)\
-    .register_upstream(test_source_5)\
-    .register_upstream(test_source_6)"""
+    .register_upstream(test_source_3)
 
 test_chain = Chain(test_dummy, test_out)
 
-# test_chain = Chain.build_linear(test_dummy, test_out)
+
+button_6 = Parameter(6)
+
+test_duration = ChainStartNode(button_6)
+
+sine_filter = Parameter(Chain.build_linear(
+    SineNode().register_upstream(test_duration),
+    ChainTerminationNode()
+))
+
+noise_source = RandomNoiseNode().register_upstream(test_duration)
+
+noise_filter = FilterNode(sine_filter).register_upstream(noise_source)
+
+noise_out = ChainTerminationNode().register_upstream(noise_filter)
+
+noise_chain = Chain(test_duration, noise_out)
+
 
 
 def event_handler():
@@ -442,17 +429,3 @@ t.start()
 t2.start()
 
 variables = {}
-
-# time.sleep(1)
-
-# something_param.param_value = 1.0
-
-# time.sleep(4)
-
-# something_param.param_value = 0.0
-
-# test_chain.play_chain()
-
-# p.terminate()
-
-# TODO: Quantizing?
