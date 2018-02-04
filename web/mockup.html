@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<!--suppress JSUnresolvedFunction, JSValidateTypes -->
+<html lang="en">
+<head>
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans:400,600,700" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+
+    <script type="text/javascript">
+        $(function () {
+            $('#test-node').draggable();
+        });
+    </script>
+</head>
+<body>
+<h1>Patch Cable</h1>
+<div class="node-adder">
+    <span>Nodes <i class="material-icons">keyboard_arrow_down</i></span>
+    <ul>
+        <li>Chain Starter</li>
+        <li>Chain Terminator</li>
+        <li class="break"></li>
+        <li>Sine Generator</li>
+        <li>Square Generator</li>
+        <li>Sawtooth Generator</li>
+        <li>Random Noise Generator</li>
+        <li class="break"></li>
+        <li>Filter</li>
+        <li>Sustain</li>
+        <li>Linear Decay</li>
+    </ul>
+</div>
+<div class="node" id="test-node">
+    <h2>Sine Generator</h2>
+    <div class="parameters">
+        <div class="flex-container">
+            <label for="frequency">Frequency</label>
+            <input type="text" id="frequency">
+        </div>
+        <div class="flex-container">
+            <label for="translate">Translation</label>
+            <input type="text" id="translate">
+        </div>
+        <div class="flex-container">
+            <label for="amplitude">Amplitude</label>
+            <input type="text" id="amplitude">
+        </div>
+    </div>
+    <div class="connections">
+        <div style="flex: 1;">
+            <div class="connection input-connection"><i class="material-icons">arrow_backward</i></div>
+        </div>
+        <div style="flex: 1;">
+            <div class="connection param-connection"><i class="material-icons">arrow_upward</i></div>
+        </div>
+        <div style="flex: 1;">
+            <div class="connection output-connection"><i class="material-icons">arrow_forward</i></div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

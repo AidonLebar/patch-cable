@@ -1,0 +1,156 @@
+* {
+    font-family: 'Open Sans', sans-serif;
+    color: #444;
+}
+
+body {
+    padding: 0;
+    margin: 0;
+    background-color: #e7e8eb;
+}
+
+body h1 {
+    margin-top: 3rem;
+    margin-left: 3rem;
+
+    font-weight: normal;
+    color: rgba(0, 0, 0, 0.3);
+}
+
+div.node {
+    top: 5rem;
+    left: 5rem;
+    box-sizing: border-box;
+    position: fixed;
+    background-color: #FEFEFE;
+    width: 14rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.18);
+    border-radius: 4px;
+    cursor: move;
+}
+
+div.node h2 {
+    font-size: 0.9rem;
+    margin-top: 0; margin-bottom: 0;
+    font-weight: normal;
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    color: #777;
+    text-align: center;
+}
+
+div.node label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-right: 0.8em;
+    line-height: 2.3em;
+    /*display: block;*/
+}
+
+div.node div.parameters {
+    padding: 0.8rem;
+    box-sizing: border-box;
+}
+
+div.node div.connections {
+    padding: 0.4rem 0.6rem;
+    display: flex;
+    border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+div.node div.connection {
+    box-sizing: border-box;
+    border-radius: 100%;
+    height: 1.3rem;
+    width: 1.3rem;
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.13);
+    text-align: center;
+    cursor: crosshair;
+}
+div.node div.input-connection {
+    float: left;
+}
+div.node div.param-connection {
+    margin: auto;
+}
+div.node div.output-connection {
+    float: right;
+}
+
+div.node div.input-connection i {
+    margin-left: 0.1rem;
+}
+
+div.node div.connection i {
+    font-size: 1rem;
+    color: #999;
+    line-height: 1.2rem;
+}
+
+
+div.flex-container {
+    display: flex;
+    margin-bottom: 0.8rem;
+}
+div.flex-container:last-child {
+    margin-bottom: 0;
+}
+
+
+div.node-adder {
+    position: fixed;
+    top: 3rem;
+    right: 3rem;
+    font-size: 1.4rem;
+    min-width: 240px;
+}
+div.node-adder span {
+    color: #666;
+    vertical-align: top;
+    float: right;
+}
+div.node-adder span i {
+    line-height: 2.3rem;
+    vertical-align: top;
+    color: #999;
+}
+
+div.node-adder ul {
+    display: none;
+    margin: 0; padding: 0 0 0.6rem 0;
+    border-radius: 4px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.18);
+}
+div.node-adder ul li {
+    list-style: none;
+    font-size: 1rem;
+    padding: 0.6rem 0.8rem 0 0.8rem;
+}
+
+div.node-adder:hover ul {
+    display: block;
+    background-color: #FEFEFE;
+    position: absolute;
+    top: 30px;
+    width: 240px;
+}
+
+
+input[type="text"], input[type="number"] {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.7rem;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid rgba(0, 0, 0, 0.13);
+    border-radius: 3px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.13);
+    outline: none;
+}
+
+input[type="text"]:active, input[type="number"]:active,
+input[type="text"]:focus, input[type="number"]:focus {
+    outline: none;
+    border-color: #AAA;
+    transition: border-color 0.2s;
+}
