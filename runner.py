@@ -26,12 +26,8 @@ TWO_PI = 2.0 * math.pi
 p = pyaudio.PyAudio()
 
 global_watchers = []
-global_steppers = []
-global_step = 0
 
 inputs = []
-
-nonce = 0
 
 
 class Node:
