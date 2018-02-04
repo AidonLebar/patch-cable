@@ -608,6 +608,11 @@ eighth_decay = Chain.build_linear(
     ChainTerminationNode()
 ).set_duration(BEAT_8TH)
 
+whole_decay = Chain.build_linear(
+    LinearDecayNode(duration=BEAT_WHOLE),
+    ChainTerminationNode()
+).set_duration(BEAT_WHOLE)
+
 
 button_7 = Parameter(7)
 button_7_start = ChainStartNode(button_7)
@@ -624,7 +629,8 @@ button_6_start = ChainStartNode(button_6)
 # button_6_source = SineNode(frequency=Parameter(123.47)).register_upstream(button_6_start)
 button_6_source = SineNode(frequency=Parameter(8), frequency_offset=110.0, frequency_multiplier=600.0)\
     .register_upstream(button_6_start)
-button_6_out = ChainTerminationNode().register_upstream(button_6_source)
+button_6_attack = LinearAttackNode(duration=BEAT_WHOLE).register_upstream(button_6_source)
+button_6_out = ChainTerminationNode(release_chain=whole_decay).register_upstream(button_6_attack)
 button_6_chain = Chain(button_6_start, button_6_out)
 
 button_5 = Parameter(5)
