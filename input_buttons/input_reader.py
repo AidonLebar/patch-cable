@@ -72,8 +72,7 @@ def input_monitor(inputs):
                 inputs[0] = 0.0
 
         if prevPotval != potIn:
-            print("potentiometer: {}".format(1/(potIn+1)))
-            inputs[7] = 1 / (potIn + 1)
+            inputs[7] = 1.0 - (potIn / 1023.0)
 
         prev = controlIn
         prevPotval = potIn

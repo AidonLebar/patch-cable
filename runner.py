@@ -172,11 +172,9 @@ class RandomNoiseNode(SourceNode):
 
 class SineNode(SourceNode):
     def sin(self, x):
-        #st = time.time()
-        freq = self.frequency_offset + self.frequency.cached_value * self.frequency_mulitplier
-        #print(time.time() - st)
         return self.translate + self.amplitude * math.sin(TWO_PI * (x / SAMPLE_RATE)
-                                                          * (freq))
+                                                          * (self.frequency_offset + self.frequency.cached_value
+                                                             * self.frequency_mulitplier))
 
     def __init__(
             self,
@@ -479,7 +477,6 @@ button_7_out = ChainTerminationNode(release_chain=eighth_decay).register_upstrea
     .register_upstream(button_7_source2)\
     .register_upstream(button_7_source3)
 button_7_chain = Chain(button_7_start, button_7_out)
-
 
 button_6 = Parameter(6)
 button_6_start = ChainStartNode(button_6)
