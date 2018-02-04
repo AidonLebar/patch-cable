@@ -368,6 +368,30 @@ class FilterNode(Node):
         self.function = self.filter_fn
 
 
+class LinearAttackNode(Node):
+    def attack_fn(self, y):
+        return (1 - (max(self.duration - self._x, 0) / self.duration)) * y
+
+    def __init__(self, duration=BEAT_HALF):
+        super().__init__()
+        self.duration = duration
+        self.function = self.attack_fn
+        self._x = 0
+
+    def step(self):
+        self._x += 1
+        super().step()
+
+    def reset_chain(self):
+        self._x = 0
+        super().reset_chain()
+
+    def get_display_properties(self):
+        return 'Duration: {} s'.format(
+            self.duration / SAMPLE_RATE
+        )
+
+
 class LinearDecayNode(Node):
     def decay_fn(self, y):
         return (max(self.duration - self._x, 0) / self.duration) * y
@@ -416,6 +440,8 @@ class Chain:
         self.duration = duration
         self.old_duration = duration
 
+        self.values = None
+
     def play_chain(self, save_values=False):
         if self.started:
             return
@@ -425,7 +451,8 @@ class Chain:
 
         sn = self.source_node
 
-        values = []
+        if save_values:
+            self.values = []
 
         def run_chain(nodes):
             while len(nodes) > 0:
@@ -448,7 +475,7 @@ class Chain:
             for i in range(int(self.duration + 1.0)):
                 self.time_elapsed += 1
                 run_chain([sn])
-                values.append(self.termination_node.value)
+                self.values.append(self.termination_node.value)
         else:
             self.stream = p.open(format=pyaudio.paFloat32, channels=1, rate=int(SAMPLE_RATE), output=True,
                                  frames_per_buffer=FRAME_SIZE, stream_callback=callback)
@@ -456,7 +483,7 @@ class Chain:
         self.started = True
 
         if save_values:
-            return values
+            return self.values
 
     def stop_chain(self):
         if self.started and self.duration >= 0:
