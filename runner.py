@@ -71,8 +71,6 @@ class Node:
 
 class SourceNode(Node):
     def __init__(self, use_global_steps=False):
-        global global_steppers
-
         super().__init__()
         self._x = 0
         self.use_global_steps = use_global_steps
