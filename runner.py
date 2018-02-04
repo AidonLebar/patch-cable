@@ -3,11 +3,8 @@
 import math
 import numpy as np
 import time
-import itertools
 import random
-import functools
 import multiprocessing
-import threading
 
 from input_buttons.input_reader import input_monitor
 
@@ -30,6 +27,33 @@ global_watchers = []
 
 manager = multiprocessing.Manager()
 shared_list = manager.list(([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
+
+
+class Parameter:
+    PARAM_CONSTANT = 'PARAM_CONSTANT'
+    PARAM_CHAIN = 'PARAM_CHAIN'
+    PARAM_INPUT = 'PARAM_INPUT'
+
+    def __init__(self, param_value):
+        if type(param_value).__name__ == 'Chain':
+            self.param_type = Parameter.PARAM_CHAIN
+        elif isinstance(param_value, float):
+            self.param_type = Parameter.PARAM_CONSTANT
+        else:
+            self.param_type = Parameter.PARAM_INPUT
+
+        self.param_value = param_value
+
+    @property
+    def value(self):
+        if self.param_type == Parameter.PARAM_CONSTANT:
+            return self.param_value
+        if self.param_type == Parameter.PARAM_CHAIN:
+            return self.param_value.value
+        if self.param_type == Parameter.PARAM_INPUT:
+            return inputs[self.param_value - 1]
+        else:
+            return 0
 
 
 class Node:
@@ -129,7 +153,7 @@ class RandomNoiseNode(SourceNode):
     def noise_fn(self, _):
         return self.translate - 1.0 + random.random() * self.amplitude * 2.0
 
-    def __init__(self, translate=.0, amplitude=1.0):
+    def __init__(self, translate=0.0, amplitude=1.0):
         super().__init__()
         self.translate = translate
         self.amplitude = amplitude
@@ -138,7 +162,7 @@ class RandomNoiseNode(SourceNode):
 
 class SineNode(SourceNode):
     def sin(self, x):
-        return self.translate + self.amplitude * math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency)
+        return self.translate + self.amplitude * math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency.value)
 
     def __init__(self, frequency=Parameter(440.0), translate=0.0, amplitude=1.0):
         super().__init__()
@@ -150,7 +174,7 @@ class SineNode(SourceNode):
 
 class SquareNode(SourceNode):
     def square(self, x):
-        return math.copysign(1, math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency))
+        return math.copysign(1, math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency.value))
 
     def __init__(self, frequency=Parameter(440.0)):
         super().__init__()
@@ -161,7 +185,7 @@ class SquareNode(SourceNode):
 class TriangleNode(SourceNode):
     def triangle(self, x):
         return self.translate + self.amplitude * (2 / math.pi)\
-               * math.asin(math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency))
+               * math.asin(math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency.value))
 
     def __init__(self, frequency=Parameter(440.0), amplitude=1.0, translate=0.0):
         super().__init__()
@@ -176,14 +200,14 @@ class KickDrumNode(SourceNode):  # kick drum
         if 0 < x < self.length:
             return self.translate + random.random() * self.amplitude
         elif self.length <= x < self.length + self.sustain:
-            return self.amplitude * math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency)
+            return self.amplitude * math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency.value)
         else:
             return 0
 
     def __init__(
             self,
 
-            frequency=75,
+            frequency=Parameter(75.0),
             length=0.005*SAMPLE_RATE,
 
             amplitude=2.0,
@@ -226,7 +250,7 @@ class SawtoothNode(SourceNode):
     def sawtooth(self, x):
         try:
             evaluation = self.amplitude * (-2.0 / math.pi *
-                                           math.atan(1.0/math.tan(x * math.pi / (SAMPLE_RATE / self.frequency))))
+                                           math.atan(1.0/math.tan(x * math.pi / (SAMPLE_RATE / self.frequency.value))))
         except ZeroDivisionError:
             evaluation = 0
         return evaluation
@@ -386,7 +410,7 @@ class Chain:
 
     def tick(self):
         if self.started and self.duration >= 0:
-            self.time_elapsed += 1.0/64.0 * SAMPLE_RATE
+            self.time_elapsed += 1.0/128.0 * SAMPLE_RATE
             if self.time_elapsed > self.duration:
                 self.stop_chain()
 
@@ -409,34 +433,6 @@ class Chain:
             old_node = n
 
         return Chain(nodes[0], nodes[-1])
-
-
-class Parameter:
-    PARAM_CONSTANT = 'PARAM_CONSTANT'
-    PARAM_CHAIN = 'PARAM_CHAIN'
-    PARAM_INPUT = 'PARAM_INPUT'
-
-    def __init__(self, param_value):
-        if isinstance(param_value, Chain):
-            self.param_type = Parameter.PARAM_CHAIN
-        elif isinstance(param_value, float):
-            self.param_type = Parameter.PARAM_CONSTANT
-        else:  # TODO
-            self.param_type = Parameter.PARAM_INPUT
-
-        self.param_value = param_value
-
-    @property
-    def value(self):
-        if self.param_type == Parameter.PARAM_CONSTANT:
-            return self.param_value
-        if self.param_type == Parameter.PARAM_CHAIN:
-            return self.param_value.value
-        if self.param_type == Parameter.PARAM_INPUT:
-            # print(inputs[self.param_value - 1])
-            return inputs[self.param_value - 1]
-        else:
-            return 0
 
 
 forth_decay = Chain.build_linear(
@@ -503,7 +499,7 @@ def event_handler(sl):
     while True:
         for w in global_watchers:
             w.tick()
-        time.sleep(1.0/64.0)
+        time.sleep(1.0/128.0)
 
 
 t = multiprocessing.Process(target=event_handler, args=(shared_list,))
