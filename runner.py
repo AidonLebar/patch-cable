@@ -195,14 +195,14 @@ class KickDrumNode(SourceNode): #kick drum
 class HiHatNode(SourceNode): #kick drum
     def hi_hat(self, x):
         if x < self.length:
-            return self.translate + random.random() * self.amplitude
+            return self.translate + random.uniform(self.pass_filter, 1.0) * self.amplitude
         else:
             return 0
 
-    def __init__(self, frequency = 20.0, length=400.0,  use_global_steps=False, amplitude=1.0, translate=0.0):
+    def __init__(self, pass_filter = 0.0, length=400.0,  use_global_steps=False, amplitude=1.0, translate=0.0):
         super().__init__(use_global_steps)
         self.length = length
-        self.frequency = frequency
+        self.pass_filter = pass_filter
         self.amplitude = amplitude
         self.function = self.hi_hat
         self.translate = translate
@@ -433,27 +433,31 @@ eighth_decay = Chain.build_linear(
 
 
 button_7 = Parameter(7)
-sawtooth_G_start = ChainStartNode(button_7)
-sawtooth_G_source1 = SineNode(frequency=49.99).register_upstream(sawtooth_G_start)
-sawtooth_G_source2 = SineNode(frequency=97.99).register_upstream(sawtooth_G_start)
-sawtooth_G_source3 = SawtoothNode(frequency=130.83).register_upstream(sawtooth_G_start)
-sawtooth_G_out = ChainTerminationNode(release_chain=eighth_decay).register_upstream(sawtooth_G_source1)\
-    .register_upstream(sawtooth_G_source2)\
-    .register_upstream(sawtooth_G_source2)
-sawtooth_G_chain = Chain(sawtooth_G_start, sawtooth_G_out)
+button_7_start = ChainStartNode(button_7)
+button_7_source1 = SineNode(frequency=49.99).register_upstream(button_7_start)
+button_7_source2 = SineNode(frequency=97.99).register_upstream(button_7_start)
+button_7_source3 = SawtoothNode(frequency=146.83).register_upstream(button_7_start)
+button_7_out = ChainTerminationNode(release_chain=eighth_decay).register_upstream(button_7_source1)\
+    .register_upstream(button_7_source2)\
+    .register_upstream(button_7_source2)
+button_7_chain = Chain(button_7_start, button_7_out)
 
 
 button_6 = Parameter(6)
-triangle_test_start = ChainStartNode(button_6)
-triangle_test_source = TriangleNode().register_upstream(triangle_test_start)
-triangle_test_out = ChainTerminationNode().register_upstream(triangle_test_source)
-triangle_test_chain = Chain(triangle_test_start, triangle_test_out)
+button_6_start = ChainStartNode(button_6)
+button_6_source = SineNode(frequency = 123.47).register_upstream(button_6_start)
+button_6_out = ChainTerminationNode().register_upstream(button_6_source)
+button_6_chain = Chain(button_6_start, button_6_out)
 
 button_5 = Parameter(5)
-sine_test_start = ChainStartNode(button_5)
-sine_test_source = SineNode().register_upstream(sine_test_start)
-sine_test_out = ChainTerminationNode().register_upstream(sine_test_source)
-sine_test_chain = Chain(sine_test_start, sine_test_out)
+button_5_start = ChainStartNode(button_5)
+button_5_source1 = SineNode(frequency = 73.4, translate = 0.1).register_upstream(button_5_start)
+button_5_source2 = TriangleNode(frequency = 73.4, translate = 0.1).register_upstream(button_5_start)
+button_5_source3 = TriangleNode(frequency = 36.7).register_upstream(button_5_start)
+button_5_out = ChainTerminationNode().register_upstream(button_5_source1)\
+    .register_upstream(button_5_source2)\
+    .register_upstream(button_5_source3)
+button_5_chain = Chain(button_5_start, button_5_out)
 
 button_4 = Parameter(4)
 kick_drum_start = ChainStartNode(button_4)
@@ -463,7 +467,7 @@ kick_drum_chain = Chain(kick_drum_start, kick_drum_out)
 
 button_3 = Parameter(3)
 hi_hat_start = ChainStartNode(button_3)
-hi_hat_source = HiHatNode().register_upstream(hi_hat_start)
+hi_hat_source = HiHatNode(pass_filter = 0.3).register_upstream(hi_hat_start)
 hi_hat_out = ChainTerminationNode().register_upstream(hi_hat_source)
 hi_hat_chain = Chain(hi_hat_start, hi_hat_out)
 
