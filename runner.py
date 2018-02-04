@@ -7,6 +7,7 @@ import time
 import itertools
 import random
 import functools
+import multiprocessing
 import threading
 
 from input_buttons.input_reader import input_monitor
@@ -29,8 +30,8 @@ p = pyaudio.PyAudio()
 
 global_watchers = []
 
-inputs = [0.0] * 8
-
+manager = multiprocessing.Manager()
+shared_list = manager.list(([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
 
 class Node:
     def id(self, x):
@@ -323,6 +324,7 @@ class Chain:
 
             return np.array(output_samples, dtype=np.float32) * VOLUME, pyaudio.paContinue
 
+
         self.stream = p.open(format=pyaudio.paFloat32, channels=1, rate=int(SAMPLE_RATE), output=True,
                              frames_per_buffer=FRAME_SIZE, stream_callback=callback)
 
@@ -409,12 +411,12 @@ class Parameter:
 
     @property
     def value(self):
-        global inputs
         if self.param_type == Parameter.PARAM_CONSTANT:
             return self.param_value
         if self.param_type == Parameter.PARAM_CHAIN:
             return self.param_value.value
         if self.param_type == Parameter.PARAM_INPUT:
+            print(inputs[self.param_value - 1])
             return inputs[self.param_value - 1]
         else:
             return 0
@@ -439,7 +441,7 @@ button_7_source2 = SineNode(frequency=97.99).register_upstream(button_7_start)
 button_7_source3 = SawtoothNode(frequency=146.83).register_upstream(button_7_start)
 button_7_out = ChainTerminationNode(release_chain=eighth_decay).register_upstream(button_7_source1)\
     .register_upstream(button_7_source2)\
-    .register_upstream(button_7_source2)
+    .register_upstream(button_7_source3)
 button_7_chain = Chain(button_7_start, button_7_out)
 
 
@@ -474,22 +476,24 @@ hi_hat_chain = Chain(hi_hat_start, hi_hat_out)
 
 button_2 = Parameter(2)
 
-button_1 = Parameter(2)
+button_1 = Parameter(1)
 
 
-
-
-def event_handler():
+def event_handler(shared_list):
     global global_watchers
+    global inputs
+    inputs = shared_list
     while True:
         for w in global_watchers:
             w.tick()
         time.sleep(1.0/64.0)
 
 
-t = threading.Thread(target=event_handler)
-t2 = threading.Thread(target=input_monitor, args=(inputs,))
+t = multiprocessing.Process(target=event_handler, args=(shared_list,))
+t2 = multiprocessing.Process(target=input_monitor, args=(shared_list,))
 t.start()
 t2.start()
+t2.join()
+t.join()
 
 variables = {}
