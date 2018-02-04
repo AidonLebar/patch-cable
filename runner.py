@@ -474,10 +474,19 @@ class Chain:
             return np.array(output_samples, dtype=np.float32) * VOLUME, pyaudio.paContinue
 
         if save_values:
-            for i in range(int(self.duration + 1.0)):
+            for i in range(int(self.duration)):
                 self.time_elapsed += 1
                 run_chain([sn])
                 self.values.append(self.termination_node.value)
+
+            if self.termination_node.release_chain is not None:
+                print('test')
+                tn = self.termination_node
+                self.stop_chain()
+                for i in range(int(tn.release_chain.duration)):
+                    run_chain([sn])
+                    self.values.append(self.termination_node.value)
+
         else:
             self.stream = p.open(format=pyaudio.paFloat32, channels=1, rate=int(SAMPLE_RATE), output=True,
                                  frames_per_buffer=FRAME_SIZE, stream_callback=callback)
@@ -696,10 +705,10 @@ command = ""
 show_re = "show\s+(?P<chain>\w+)"
 wave_re = "wave\s+(?P<dur>[0-9\.]+)\s+(?P<chain>\w+)"
 
-while command != "quit":
+while command not in ["quit", "exit"]:
     command = input("patch-cable > ")
 
-    if command == "quit":
+    if command in ["quit", "exit"]:
         continue
     elif re.match(show_re, command):
         m = re.match(show_re, command).groupdict()
