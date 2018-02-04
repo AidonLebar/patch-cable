@@ -4,11 +4,15 @@ import serial
 def input_monitor(inputs):
     arduino = serial.Serial('/dev/cu.usbmodem1411', 9600)
     arduino.reset_input_buffer()
-    prev = int.from_bytes(arduino.read(), byteorder = 'big')
-    prevPotval = int(arduino.readline())
+    prev = 0
+    prevPotval = 0
     while(True):
-        controlIn = int.from_bytes(arduino.read(), byteorder = 'big')
-        potIn = int(arduino.readline())
+        try:
+            controlIn = int.from_bytes(arduino.read(), byteorder = 'big')
+            potIn = int(arduino.readline())
+        except Exception:
+            continue
+            
         if controlIn != prev:
             if controlIn & 0b00000001 != 0 and prev & 0b00000001 == 0:
                 print("button 7.")

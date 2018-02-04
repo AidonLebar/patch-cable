@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
-import pyaudio
 import math
 import numpy as np
 import time
 import itertools
 import random
 import functools
+import multiprocessing
 import threading
 
 from input_buttons.input_reader import input_monitor
@@ -25,11 +25,11 @@ BEAT_WHOLE = SAMPLE_RATE
 
 TWO_PI = 2.0 * math.pi
 
-p = pyaudio.PyAudio()
 
 global_watchers = []
 
-inputs = [0.0] * 8
+manager = multiprocessing.Manager()
+shared_list = manager.list(([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
 
 
 class Node:
@@ -162,9 +162,59 @@ class SquareNode(SourceNode):
         self.function = self.square
 
 
+class TriangleNode(SourceNode):
+    def triangle(self, x):
+        return (2 / math.pi) * math.asin(math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency))
+
+    def __init__(self, frequency=440.0, use_global_steps=False, amplitude=0.0, translate=0.0):
+        super().__init__(use_global_steps)
+        self.frequency = frequency
+        self.function = self.triangle
+        self.translate = translate
+        self.amplitude = amplitude
+
+
+class KickDrumNode(SourceNode):  # kick drum
+    def kick_drum(self, x):
+        if 0 < x < self.length:
+            return self.translate + random.random() * self.amplitude
+        elif self.length <= x < self.length + 600:
+            return self.amplitude * math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency)
+        else:
+            return 0
+
+    def __init__(self, frequency=75, length=100.0,  use_global_steps=False, amplitude=2.0, translate=0.0):
+        super().__init__(use_global_steps)
+        self.length = length
+        self.frequency = frequency
+        self.amplitude = amplitude
+        self.function = self.kick_drum
+        self.translate = translate
+
+
+class HiHatNode(SourceNode):  # kick drum
+    def hi_hat(self, x):
+        if x < self.length:
+            return self.translate + random.uniform(self.pass_filter, 1.0) * self.amplitude
+        else:
+            return 0
+
+    def __init__(self, pass_filter=0.0, length=400.0,  use_global_steps=False, amplitude=1.0, translate=0.0):
+        super().__init__(use_global_steps)
+        self.length = length
+        self.pass_filter = pass_filter
+        self.amplitude = amplitude
+        self.function = self.hi_hat
+        self.translate = translate
+
+
 class SawtoothNode(SourceNode):
     def sawtooth(self, x):
-        return self.amplitude * (-2.0 / math.pi * math.atan(1.0/math.tan(x * math.pi / (SAMPLE_RATE / self.frequency))))
+        try:
+            evaluation = self.amplitude * (-2.0 / math.pi * math.atan(1.0/math.tan(x * math.pi / (SAMPLE_RATE / self.frequency))))
+        except ZeroDivisionError:
+            evaluation = 0
+        return evaluation
 
     def __init__(self, frequency=440.0, use_global_steps=False, amplitude=0.5):
         super().__init__(use_global_steps)
@@ -254,6 +304,9 @@ class Chain:
         if self.started:
             return
 
+        import pyaudio
+        p = pyaudio.PyAudio()
+
         sn = self.source_node
 
         def run_chain(nodes):
@@ -273,6 +326,10 @@ class Chain:
 
             return np.array(output_samples, dtype=np.float32) * VOLUME, pyaudio.paContinue
 
+        print('playing')
+        # print(p.get_default_host_api_info())
+        # print(p.get_device_count())
+        # print(p.get_default_output_device_info())
         self.stream = p.open(format=pyaudio.paFloat32, channels=1, rate=int(SAMPLE_RATE), output=True,
                              frames_per_buffer=FRAME_SIZE, stream_callback=callback)
 
@@ -359,100 +416,89 @@ class Parameter:
 
     @property
     def value(self):
-        global inputs
         if self.param_type == Parameter.PARAM_CONSTANT:
             return self.param_value
         if self.param_type == Parameter.PARAM_CHAIN:
             return self.param_value.value
         if self.param_type == Parameter.PARAM_INPUT:
+            # print(inputs[self.param_value - 1])
             return inputs[self.param_value - 1]
         else:
             return 0
 
 
-test_decay = Chain.build_linear(
+forth_decay = Chain.build_linear(
     LinearDecayNode(duration=BEAT_4TH),
     ChainTerminationNode()
 ).set_duration(BEAT_4TH)
 
-# test_filter_param = Parameter(Chain.build_linear(
-#     BeatNode(use_global_steps=True, beat_length=BEAT_4TH, gap_length=BEAT_4TH*3),
-#     ChainTerminationNode()
-# ))
+
+eighth_decay = Chain.build_linear(
+    LinearDecayNode(duration=BEAT_8TH),
+    ChainTerminationNode()
+).set_duration(BEAT_8TH)
 
 
-something_param = Parameter(7)
+button_7 = Parameter(7)
+button_7_start = ChainStartNode(button_7)
+button_7_source1 = SineNode(frequency=49.99).register_upstream(button_7_start)
+button_7_source2 = SineNode(frequency=97.99).register_upstream(button_7_start)
+button_7_source3 = SawtoothNode(frequency=146.83).register_upstream(button_7_start)
+button_7_out = ChainTerminationNode(release_chain=eighth_decay).register_upstream(button_7_source1)\
+    .register_upstream(button_7_source2)\
+    .register_upstream(button_7_source3)
+button_7_chain = Chain(button_7_start, button_7_out)
 
 
-# test_dummy = ChainStartNode(something_param)
-# test_source = RandomNoiseNode(amplitude=1)\
-#     .register_upstream(test_dummy)
-# test_source_2 = SquareNode(220.0)\
-#     .register_upstream(test_dummy)
-# test_filter = FilterNode(test_filter_param)\
-#     .register_upstream(test_source)
-# test_out = ChainTerminationNode(release_chain=test_decay) \
-#     .register_upstream(test_filter) \
-#     .register_upstream(test_source_2)
-#
-# test_chain = Chain(test_dummy, test_out)
+button_6 = Parameter(6)
+button_6_start = ChainStartNode(button_6)
+button_6_source = SineNode(frequency=123.47).register_upstream(button_6_start)
+button_6_out = ChainTerminationNode().register_upstream(button_6_source)
+button_6_chain = Chain(button_6_start, button_6_out)
+
+button_5 = Parameter(5)
+button_5_start = ChainStartNode(button_5)
+button_5_source1 = SineNode(frequency=73.4, translate=0.1).register_upstream(button_5_start)
+button_5_source2 = TriangleNode(frequency=73.4, translate=0.1).register_upstream(button_5_start)
+button_5_source3 = TriangleNode(frequency=36.7).register_upstream(button_5_start)
+button_5_out = ChainTerminationNode().register_upstream(button_5_source1)\
+    .register_upstream(button_5_source2)\
+    .register_upstream(button_5_source3)
+button_5_chain = Chain(button_5_start, button_5_out)
+
+button_4 = Parameter(4)
+kick_drum_start = ChainStartNode(button_4)
+kick_drum_source = KickDrumNode().register_upstream(kick_drum_start)
+kick_drum_out = ChainTerminationNode().register_upstream(kick_drum_source)
+kick_drum_chain = Chain(kick_drum_start, kick_drum_out)
+
+button_3 = Parameter(3)
+hi_hat_start = ChainStartNode(button_3)
+hi_hat_source = HiHatNode(pass_filter=0.3).register_upstream(hi_hat_start)
+hi_hat_out = ChainTerminationNode().register_upstream(hi_hat_source)
+hi_hat_chain = Chain(hi_hat_start, hi_hat_out)
 
 
-test_dummy = ChainStartNode(something_param)  # SourceNode()
+button_2 = Parameter(2)
 
-test_source_1 = SineNode(frequency=164.81).register_upstream(test_dummy)
-test_source_2 = SineNode(frequency=196.00).register_upstream(test_dummy)
-test_source_3 = SineNode(frequency=246.94).register_upstream(test_dummy)
-# test_source_4 = SineNode(frequency=329.63).register_upstream(test_dummy)
-# test_source_5 = SineNode(frequency=392.00).register_upstream(test_dummy)
-# test_source_6 = SineNode(frequency=493.88).register_upstream(test_dummy)
-
-# release_chain=test_decay
-test_out = ChainTerminationNode(release_chain=test_decay)\
-    .register_upstream(test_source_1) \
-    .register_upstream(test_source_2) \
-    .register_upstream(test_source_3) #\
-    # .register_upstream(test_source_4)\
-    # .register_upstream(test_source_5)
-
-"""
-\
-    .register_upstream(test_source_2)\
-    .register_upstream(test_source_3)\
-    .register_upstream(test_source_4)\
-    .register_upstream(test_source_5)\
-    .register_upstream(test_source_6)"""
-
-test_chain = Chain(test_dummy, test_out)
-
-# test_chain = Chain.build_linear(test_dummy, test_out)
+button_1 = Parameter(1)
 
 
-def event_handler():
+def event_handler(sl):
     global global_watchers
+    global inputs
+    inputs = sl
     while True:
         for w in global_watchers:
             w.tick()
         time.sleep(1.0/64.0)
 
 
-t = threading.Thread(target=event_handler)
-t2 = threading.Thread(target=input_monitor, args=(inputs,))
+t = multiprocessing.Process(target=event_handler, args=(shared_list,))
+t2 = multiprocessing.Process(target=input_monitor, args=(shared_list,))
 t.start()
 t2.start()
+t2.join()
+t.join()
 
 variables = {}
-
-# time.sleep(1)
-
-# something_param.param_value = 1.0
-
-# time.sleep(4)
-
-# something_param.param_value = 0.0
-
-# test_chain.play_chain()
-
-# p.terminate()
-
-# TODO: Quantizing?
