@@ -315,21 +315,23 @@ class SawtoothNode(SourceNode):
     def sawtooth(self, x):
         try:
             evaluation = self.amplitude * (-2.0 / math.pi *
-                                           math.atan(1.0/math.tan(x * math.pi / (SAMPLE_RATE / self.frequency.value))))
+                                           math.atan(1.0/math.tan(self.phase + x * math.pi / (SAMPLE_RATE / self.frequency.value))))
         except ZeroDivisionError:
             evaluation = 0
         return evaluation
 
-    def __init__(self, frequency=Parameter(440.0), amplitude=1.0):
+    def __init__(self, frequency=Parameter(440.0), amplitude=1.0, phase=0.0):
         super().__init__()
         self.frequency = frequency
         self.function = self.sawtooth
         self.amplitude = amplitude
+        self.phase = phase
 
     def get_display_properties(self):
-        return 'Amplitude: {}\nFrequency: {}'.format(
+        return 'Amplitude: {}\nFrequency: {}\nPhase: {}'.format(
             self.amplitude,
-            self.frequency.cached_value
+            self.frequency.cached_value,
+            self.phase
         )
 
 
@@ -366,6 +368,30 @@ class FilterNode(Node):
         self.multiplier = multiplier
 
         self.function = self.filter_fn
+
+
+class LinearAttackNode(Node):
+    def attack_fn(self, y):
+        return (1 - (max(self.duration - self._x, 0) / self.duration)) * y
+
+    def __init__(self, duration=BEAT_HALF):
+        super().__init__()
+        self.duration = duration
+        self.function = self.attack_fn
+        self._x = 0
+
+    def step(self):
+        self._x += 1
+        super().step()
+
+    def reset_chain(self):
+        self._x = 0
+        super().reset_chain()
+
+    def get_display_properties(self):
+        return 'Duration: {} s'.format(
+            self.duration / SAMPLE_RATE
+        )
 
 
 class LinearDecayNode(Node):
@@ -416,6 +442,8 @@ class Chain:
         self.duration = duration
         self.old_duration = duration
 
+        self.values = None
+
     def play_chain(self, save_values=False):
         if self.started:
             return
@@ -425,7 +453,8 @@ class Chain:
 
         sn = self.source_node
 
-        values = []
+        if save_values:
+            self.values = []
 
         def run_chain(nodes):
             while len(nodes) > 0:
@@ -445,10 +474,19 @@ class Chain:
             return np.array(output_samples, dtype=np.float32) * VOLUME, pyaudio.paContinue
 
         if save_values:
-            for i in range(int(self.duration + 1.0)):
+            for i in range(int(self.duration)):
                 self.time_elapsed += 1
                 run_chain([sn])
-                values.append(self.termination_node.value)
+                self.values.append(self.termination_node.value)
+
+            if self.termination_node.release_chain is not None:
+                print('test')
+                tn = self.termination_node
+                self.stop_chain()
+                for i in range(int(tn.release_chain.duration)):
+                    run_chain([sn])
+                    self.values.append(self.termination_node.value)
+
         else:
             self.stream = p.open(format=pyaudio.paFloat32, channels=1, rate=int(SAMPLE_RATE), output=True,
                                  frames_per_buffer=FRAME_SIZE, stream_callback=callback)
@@ -456,7 +494,7 @@ class Chain:
         self.started = True
 
         if save_values:
-            return values
+            return self.values
 
     def stop_chain(self):
         if self.started and self.duration >= 0:
@@ -581,6 +619,11 @@ eighth_decay = Chain.build_linear(
     ChainTerminationNode()
 ).set_duration(BEAT_8TH)
 
+whole_decay = Chain.build_linear(
+    LinearDecayNode(duration=BEAT_WHOLE),
+    ChainTerminationNode()
+).set_duration(BEAT_WHOLE)
+
 
 button_7 = Parameter(7)
 button_7_start = ChainStartNode(button_7)
@@ -597,7 +640,8 @@ button_6_start = ChainStartNode(button_6)
 # button_6_source = SineNode(frequency=Parameter(123.47)).register_upstream(button_6_start)
 button_6_source = SineNode(frequency=Parameter(8), frequency_offset=110.0, frequency_multiplier=600.0)\
     .register_upstream(button_6_start)
-button_6_out = ChainTerminationNode().register_upstream(button_6_source)
+button_6_attack = LinearAttackNode(duration=BEAT_WHOLE).register_upstream(button_6_source)
+button_6_out = ChainTerminationNode(release_chain=whole_decay).register_upstream(button_6_attack)
 button_6_chain = Chain(button_6_start, button_6_out)
 
 button_5 = Parameter(5)
@@ -656,15 +700,23 @@ t.start()
 t2.start()
 t3.start()
 
+command = ""
 
-# while command != "quit":
-#     command = input("patch-cable > ")
-#
-#     if command == "quit":
-#         continue
-#     elif re.match("show[\w+]")
-#
-#     print(command)
+show_re = "show\s+(?P<chain>\w+)"
+wave_re = "wave\s+(?P<dur>[0-9\.]+)\s+(?P<chain>\w+)"
+
+while command not in ["quit", "exit"]:
+    command = input("patch-cable > ")
+
+    if command in ["quit", "exit"]:
+        continue
+    elif re.match(show_re, command):
+        m = re.match(show_re, command).groupdict()
+        eval('{}.visualize_chain()'.format(m['chain']))
+    elif re.match(wave_re, command):
+        m = re.match(wave_re, command).groupdict()
+        print('{}.chain_playviz({})'.format(m['chain'], float(m['dur']) * SAMPLE_RATE))
+        eval('{}.chain_playviz({})'.format(m['chain'], float(m['dur']) * SAMPLE_RATE))
 
 quit_threads.value = 1
 
