@@ -315,7 +315,8 @@ class SawtoothNode(SourceNode):
     def sawtooth(self, x):
         try:
             evaluation = self.amplitude * (-2.0 / math.pi *
-                                           math.atan(1.0/math.tan(self.phase + x * math.pi / (SAMPLE_RATE / self.frequency.value))))
+                                           math.atan(1.0/math.tan(
+                                               self.phase + x * math.pi / (SAMPLE_RATE / self.frequency.value))))
         except ZeroDivisionError:
             evaluation = 0
         return evaluation
@@ -712,11 +713,16 @@ while command not in ["quit", "exit"]:
         continue
     elif re.match(show_re, command):
         m = re.match(show_re, command).groupdict()
-        eval('{}.visualize_chain()'.format(m['chain']))
+        try:
+            eval('{}.visualize_chain()'.format(m['chain']))
+        except NameError:
+            print('Bad chain name.')
     elif re.match(wave_re, command):
         m = re.match(wave_re, command).groupdict()
-        print('{}.chain_playviz({})'.format(m['chain'], float(m['dur']) * SAMPLE_RATE))
-        eval('{}.chain_playviz({})'.format(m['chain'], float(m['dur']) * SAMPLE_RATE))
+        try:
+            eval('{}.chain_playviz({})'.format(m['chain'], float(m['dur']) * SAMPLE_RATE))
+        except NameError:
+            print('Bad chain name.')
 
 quit_threads.value = 1
 

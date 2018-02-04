@@ -2,8 +2,13 @@ import serial
 
 
 def input_monitor(inputs, qt):
-    arduino = serial.Serial('/dev/cu.usbmodem1411', 9600)
-    arduino.reset_input_buffer()
+    try:
+        arduino = serial.Serial('/dev/cu.usbmodem1411', 9600)
+        arduino.reset_input_buffer()
+    except (FileNotFoundError, serial.serialutil.SerialException):
+        print('No device attached.')
+        return
+
     prev = 0
     prevPotval = 0
     while not qt.value:
