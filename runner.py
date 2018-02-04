@@ -7,6 +7,7 @@ import time
 import itertools
 import random
 import functools
+import threading
 
 
 SAMPLE_RATE = 19200.0
@@ -23,8 +24,11 @@ TWO_PI = 2.0 * math.pi
 
 p = pyaudio.PyAudio()
 
+global_watchers = []
 global_steppers = []
 global_step = 0
+
+inputs = []
 
 
 class Node:
@@ -54,18 +58,24 @@ class Node:
 
     def step(self):
         self.value = self.function(sum([up.value for up in self.upstream]) / self.upstream_count)
+        # print([up.value for up in self.upstream])
 
     def run_chain(self):
         self.step()
         for ds in self.downstream:
             ds.run_chain()
 
+    def reset_chain(self):
+        self.value = self.function(0)
+        for ds in self.downstream:
+            ds.reset_chain()
+
 
 class SourceNode(Node):
     def __init__(self, use_global_steps=False):
         global global_steppers
 
-        super(SourceNode, self).__init__()
+        super().__init__()
         self._x = 0
         self.use_global_steps = use_global_steps
 
@@ -75,10 +85,42 @@ class SourceNode(Node):
     def step(self):
         self.value = self.function(global_step)
 
+    def reset_chain(self):
+        self._x = 0
+        super().reset_chain()
 
-class OutputNode(Node):
-    def __init__(self):
-        super(OutputNode, self).__init__()
+
+class ChainStartNode(SourceNode):
+    def __init__(self, start_param, gate=0.01):
+        global global_watchers
+
+        super().__init__()
+        self.start_param = start_param
+        self.gate = gate
+        self.started = False
+        self.chain = None
+
+        global_watchers.append(self)
+
+        if start_param.value > self.gate:
+            self.run_chain()
+
+    def tick(self):
+        new_param_value = self.start_param.value
+        if new_param_value >= self.gate and self.chain is not None and not self.chain.started:
+            self.chain.play_chain()
+        elif self.start_param.value < self.gate and self.chain is not None and self.chain.started:
+            self.chain.stop_chain()
+
+    def reset_chain(self):
+        self.started = False
+        super().reset_chain()
+
+
+class ChainTerminationNode(Node):
+    def __init__(self, release_chain=None):
+        super().__init__()
+        self.release_chain = release_chain
 
 
 class RandomNoiseNode(SourceNode):
@@ -86,7 +128,7 @@ class RandomNoiseNode(SourceNode):
         return self.translate + random.random() * self.amplitude
 
     def __init__(self, use_global_steps=False, translate=0.0, amplitude=1.0):
-        super(RandomNoiseNode, self).__init__(use_global_steps)
+        super().__init__(use_global_steps)
         self.translate = translate
         self.amplitude = amplitude
         self.function = self.noise_fn
@@ -97,7 +139,7 @@ class SineNode(SourceNode):
         return self.translate + self.amplitude * math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency)
 
     def __init__(self, frequency=440.0, use_global_steps=False, translate=0.0, amplitude=1.0):
-        super(SineNode, self).__init__(use_global_steps)
+        super().__init__(use_global_steps)
         self.frequency = frequency
         self.function = self.sin
         self.translate = translate
@@ -109,7 +151,7 @@ class SquareNode(SourceNode):
         return math.copysign(1, math.sin(TWO_PI * (x / SAMPLE_RATE) * self.frequency))
 
     def __init__(self, frequency=440.0, use_global_steps=False):
-        super(SquareNode, self).__init__(use_global_steps)
+        super().__init__(use_global_steps)
         self.frequency = frequency
         self.function = self.square
 
@@ -119,7 +161,7 @@ class SawtoothNode(SourceNode):
         return self.amplitude * (-2.0 / math.pi * math.atan(1.0/math.tan(x * math.pi / (SAMPLE_RATE / self.frequency))))
 
     def __init__(self, frequency=440.0, use_global_steps=False, amplitude=0.5):
-        super(SawtoothNode, self).__init__(use_global_steps)
+        super().__init__(use_global_steps)
         self.frequency = frequency
         self.function = self.sawtooth
         self.amplitude = amplitude
@@ -139,7 +181,7 @@ class BeatNode(SourceNode):
             beat_length=BEAT_4TH,
             gap_length=BEAT_4TH
     ):
-        super(BeatNode, self).__init__(use_global_steps)
+        super().__init__(use_global_steps)
         self.translate = translate
         self.amplitude = amplitude
         self.beat_length = beat_length
@@ -153,21 +195,52 @@ class FilterNode(Node):
         return x * self.filter_param.value
 
     def __init__(self, filter_param):
-        super(FilterNode, self).__init__()
+        super().__init__()
         self.filter_param = filter_param
 
         self.function = self.filter_fn
+
+
+class LinearDecayNode(Node):
+    def decay_fn(self, y):
+        return (max(self.duration - self._x, 0) / self.duration) * y
+
+    def __init__(self, duration=BEAT_HALF):
+        super().__init__()
+        self.duration = duration
+        self.function = self.decay_fn
+        self._x = 0
+
+    def step(self):
+        self._x += 1
+        super().step()
 
 
 cached_repeat = range(1024)
 
 
 class Chain:
-    def __init__(self, source_node, output_node):
-        self.source_node = source_node
-        self.output_node = output_node
+    def __init__(self, source_node, termination_node, duration=-1.0):
+        global global_watchers
 
-    def play_chain(self, play_time=3.0):
+        global_watchers.append(self)
+
+        self.source_node = source_node
+        self.termination_node = termination_node
+
+        self.source_node.chain = self
+        self.termination_node.chain = self
+
+        self.stream = None
+        self.started = False
+
+        self.time_elapsed = 0.0
+        self.duration = duration
+
+    def play_chain(self):
+        if self.started:
+            return
+
         def callback(_in_data, _frame_count, _time_info, _status):
             global global_step
 
@@ -181,27 +254,43 @@ class Chain:
                 for n in global_steppers:
                     n.run_chain()
 
-                output_samples.append(self.output_node.value)
+                output_samples.append(self.termination_node.value)
 
             return VOLUME * np.array(output_samples).astype(np.float32), pyaudio.paContinue
 
-        stream = p.open(format=pyaudio.paFloat32, channels=1, rate=int(SAMPLE_RATE), output=True,
-                        stream_callback=callback)
+        self.stream = p.open(format=pyaudio.paFloat32, channels=1, rate=int(SAMPLE_RATE), output=True,
+                             stream_callback=callback)
 
-        stream.start_stream()
+        self.started = True
 
-        secs = play_time
-        while stream.is_active() and secs > 0.2:
-            secs -= 0.2
-            time.sleep(0.2)
+    def stop_chain(self):
+        if self.termination_node.release_chain is not None and self.termination_node.release_chain.duration >= 0.0:
+            self.termination_node.release_chain.source_node.register_upstream(self.termination_node)
+            duration = self.termination_node.release_chain.duration
+            self.termination_node = self.termination_node.release_chain.termination_node
+            time.sleep(duration / SAMPLE_RATE)
 
-        stream.stop_stream()
+        self.stream.stop_stream()
+        self.stream.close()
+        self.stream = None
 
-        stream.close()
+        self.started = False
+
+        self.source_node.reset_chain()
+
+    def tick(self):
+        if self.started and self.duration >= 0:
+            self.time_elapsed += 1.0/32.0
+            if self.time_elapsed > self.duration:
+                self.stop_chain()
+
+    def set_duration(self, duration):
+        self.duration = duration
+        return self
 
     @property
     def value(self):
-        return self.output_node.value
+        return self.termination_node.value
 
     @staticmethod
     def build_linear(*nodes):
@@ -220,45 +309,90 @@ class Parameter:
     PARAM_CHAIN = 'PARAM_CHAIN'
     PARAM_INPUT = 'PARAM_INPUT'
 
-    def __init__(self, param_type, param_value):
-        self.param_type = param_type
+    def __init__(self, param_value):
+        if isinstance(param_value, Chain):
+            self.param_type = Parameter.PARAM_CHAIN
+        elif isinstance(param_value, float):
+            self.param_type = Parameter.PARAM_CONSTANT
+        else:  # TODO
+            self.param_type = Parameter.PARAM_INPUT
+
         self.param_value = param_value
 
     @property
     def value(self):
+        global inputs
         if self.param_type == Parameter.PARAM_CONSTANT:
             return self.param_value
         if self.param_type == Parameter.PARAM_CHAIN:
             return self.param_value.value
         if self.param_type == Parameter.PARAM_INPUT:
-            return 0  # TODO
+            return inputs[self.param_value - 1]
         else:
             return 0
 
 
-test_filter_param = Parameter(param_type=Parameter.PARAM_CHAIN, param_value=Chain.build_linear(
+test_decay = Chain.build_linear(LinearDecayNode(duration=BEAT_WHOLE)).set_duration(BEAT_WHOLE)
+
+test_filter_param = Parameter(Chain.build_linear(
     BeatNode(use_global_steps=True, beat_length=BEAT_4TH, gap_length=BEAT_4TH*3),
-    OutputNode()
+    ChainTerminationNode()
 ))
 
-test_dummy = SourceNode()
-test_source = RandomNoiseNode(amplitude=0.5)\
+
+something_param = Parameter(0.0)
+
+
+test_dummy = ChainStartNode(something_param)
+test_source = RandomNoiseNode(amplitude=1)\
     .register_upstream(test_dummy)
 test_source_2 = SquareNode(220.0)\
     .register_upstream(test_dummy)
 test_filter = FilterNode(test_filter_param)\
     .register_upstream(test_source)
-test_out = OutputNode() \
+test_out = ChainTerminationNode(release_chain=test_decay) \
     .register_upstream(test_filter) \
     .register_upstream(test_source_2)
 
 test_chain = Chain(test_dummy, test_out)
 
-inputs = []
+
+# test_dummy = SourceNode()
+
+# test_source_1 = SineNode(frequency=220.0).register_upstream(test_dummy)
+# test_source_2 = SquareNode(frequency=228.0).register_upstream(test_dummy)
+
+# test_out = ChainTerminationNode().register_upstream(test_source_1).register_upstream(test_source_2)
+
+# test_chain = Chain(test_dummy, test_out)
+
+# test_chain = Chain.build_linear(test_dummy, test_out)
+
+def event_handler():
+    global global_watchers
+    while True:
+        for w in global_watchers:
+            w.tick()
+        time.sleep(1.0/32.0)
+
+
+t = threading.Thread(target=event_handler)
+t.start()
+
+print('!!!')
+
 variables = {}
 
-test_chain.play_chain()
+time.sleep(1)
 
-p.terminate()
+something_param.param_value = 1.0
+
+time.sleep(4)
+
+something_param.param_value = 0.0
+
+# test_chain.play_chain()
+
+# p.terminate()
 
 # TODO: Quantizing?
